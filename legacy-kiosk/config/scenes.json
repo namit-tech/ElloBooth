@@ -1,0 +1,55 @@
+{
+  "model": "gemini-3.1-flash-lite-image",
+  "imageSize": "1K",
+  "_modelOptions": [
+    "gemini-3.1-flash-lite-image  - fastest + cheapest (~$0.034/img). Best for a live booth queue.",
+    "gemini-3.1-flash-image       - better quality, ~2x slower (~$0.067/img).",
+    "gemini-3-pro-image           - best quality, slowest (~$0.134/img). Good for print output."
+  ],
+  "autoCaptureSeconds": 2,
+  "countdownSeconds": 3,
+  "resultDisplaySeconds": 25,
+
+  "scenes": [
+    {
+      "id": "khatushyam",
+      "name": "खाटू श्याम जी",
+      "subtitle": "श्री श्याम दरबार में दर्शन",
+      "reference": "khatushyam.jpg",
+      "aspectRatio": "3:4",
+      "scene": "A grand temple sanctum. The divine figure from IMAGE 2 is enthroned on a decorated altar on the left, surrounded by marigold and rose garlands, brass oil lamps, and soft golden light rays falling from above. Warm devotional atmosphere, incense haze in the air.",
+      "pose": "Place the visitor from IMAGE 1 standing on the right side of the frame, in front of and slightly below the altar, turned three-quarters toward the divine figure. Their palms are pressed together at chest height in a namaskar / folded-hands gesture, head bowed slightly, eyes lowered in reverence. Their expression is calm and devotional. Both figures are fully visible in one frame.",
+      "mood": "Warm golden-hour devotional lighting, rich saturated temple colours, shallow depth of field, shot like a respectful professional temple photograph."
+    },
+    {
+      "id": "mahavir",
+      "name": "भगवान महावीर",
+      "subtitle": "महावीर स्वामी के चरणों में",
+      "reference": "mahavir.jpg",
+      "aspectRatio": "3:4",
+      "scene": "A serene white marble Jain temple interior. The figure from IMAGE 2 is seated in meditation on a raised marble pedestal on the left, framed by intricately carved arches, with soft diffused daylight and a calm minimal palette of white, cream and pale gold.",
+      "pose": "Place the visitor from IMAGE 1 on the right, standing a respectful distance from the pedestal, body turned toward the seated figure, palms joined together at the chest in a namaskar gesture, head gently bowed, peaceful expression. Both figures fully visible in one frame.",
+      "mood": "Soft, clean, diffused natural light. Serene and minimal. Low contrast, gentle shadows, tranquil and dignified."
+    },
+    {
+      "id": "celebrity",
+      "name": "Celebrity Meet",
+      "subtitle": "Star ke saath ek yaadgaar photo",
+      "reference": "celebrity.jpg",
+      "aspectRatio": "4:3",
+      "scene": "A polished event backdrop - a red carpet step-and-repeat media wall with soft branded panels, bright event spotlights and a subtle blurred crowd with camera flashes in the background.",
+      "pose": "Place the visitor from IMAGE 1 standing shoulder-to-shoulder beside the person from IMAGE 2, both facing the camera and smiling naturally, as in a genuine fan meet-and-greet photograph. The person from IMAGE 2 has one arm relaxed around the visitor's shoulder in a friendly pose. Natural, candid, equal footing, both faces clearly visible.",
+      "mood": "Bright, crisp event photography with a on-camera flash look, vibrant colours, slight background bokeh, shot at eye level on a 35mm lens."
+    },
+    {
+      "id": "mascot",
+      "name": "Brand Mascot",
+      "subtitle": "Mascot ke saath selfie",
+      "reference": "mascot.png",
+      "aspectRatio": "4:3",
+      "scene": "A bright, colourful exhibition stall with clean branded panels, modern lighting and a lively but softly blurred trade-show background.",
+      "pose": "Place the visitor from IMAGE 1 standing next to the character from IMAGE 2, both facing the camera. The visitor is smiling and giving a thumbs-up; the character stands beside them in a cheerful, welcoming pose. Both fully visible.",
+      "mood": "Bright, high-key, cheerful commercial photography. Punchy colours, even lighting, playful and energetic."
+    }
+  ]
+}

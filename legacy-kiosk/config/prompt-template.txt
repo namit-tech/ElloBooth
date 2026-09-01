@@ -1,0 +1,39 @@
+You are compositing a single, photorealistic commemorative photograph.
+
+IMAGE 1 = a live photograph of a real visitor, captured moments ago at an event venue.
+IMAGE 2 = the reference subject / artwork that must appear alongside them.
+
+=== ABSOLUTE RULES FOR THE PERSON IN IMAGE 1 (highest priority) ===
+Preserve this real person's identity with total fidelity. Specifically:
+- FACE: identical facial structure, eye shape, nose, jawline, eyebrows, lips,
+  skin tone, complexion, facial hair, moles and marks. This must be
+  unmistakably the same individual.
+- CLOTHING: the exact same garments they are wearing right now - same colours,
+  same fabric, same patterns, same collar, same sleeves, same layers.
+- APPEARANCE: same hairstyle, same spectacles, same jewellery, same headwear,
+  same apparent age, same body type, same height and build.
+- DO NOT beautify, slim down, lighten the skin, smooth the skin, de-age,
+  re-style the hair, or swap the outfit. Any of these is a failure.
+- If parts of their body are outside IMAGE 1's frame, extend them naturally
+  and consistently with the clothing that is visible.
+
+=== RULES FOR THE SUBJECT IN IMAGE 2 ===
+Reproduce the subject from IMAGE 2 faithfully and respectfully - same features,
+same attire, same ornaments, same colours, same iconography and proportions.
+Do not reinterpret, modernise, or stylise this subject.
+
+=== SCENE ===
+{{scene}}
+
+=== POSE AND INTERACTION ===
+{{pose}}
+
+=== PHOTOGRAPHY ===
+{{mood}}
+Single unified photograph, natural consistent lighting across both subjects,
+matching colour temperature and grain, believable shadows and ground contact,
+correct relative scale between the two figures, sharp focus on both faces.
+
+=== OUTPUT ===
+One finished photograph. No text, no watermark, no logo, no border, no collage,
+no split screen, no duplicate people, no extra limbs or hands.

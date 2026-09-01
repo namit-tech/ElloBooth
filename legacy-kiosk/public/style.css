@@ -1,0 +1,135 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --gold: #e0a63c;
+  --ink: #f6efe3;
+  --bg: #100e0c;
+}
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--ink);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  cursor: none;
+  user-select: none;
+}
+
+/* Live feed sits behind everything, mirrored so it reads like a mirror.
+   The capture canvas un-mirrors it so text on clothing stays readable. */
+#video {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%; object-fit: cover;
+  transform: scaleX(-1);
+  filter: brightness(.42) saturate(.75);
+  transition: filter .6s ease;
+}
+body.live #video { filter: brightness(.82) saturate(1); }
+body.busy #video { filter: brightness(.2) saturate(.3) blur(10px); }
+
+#vignette {
+  position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 35%, #000000cc 100%);
+}
+
+/* ---------- operator bar ---------- */
+#bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 14px 22px;
+  background: linear-gradient(#000000b0, transparent);
+  opacity: .25; transition: opacity .25s;
+}
+#bar:hover { opacity: 1; }
+#scenes { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.chip {
+  border: 1px solid #ffffff33; background: #ffffff14; color: var(--ink);
+  padding: 9px 18px; border-radius: 999px;
+  font-size: 15px; cursor: pointer; white-space: nowrap;
+  transition: all .18s;
+}
+.chip:hover { background: #ffffff26; }
+.chip.on { background: var(--gold); border-color: var(--gold); color: #100e0c; font-weight: 700; }
+.chip.missing { opacity: .35; text-decoration: line-through; }
+
+#hint { font-size: 12px; opacity: .5; letter-spacing: .06em; white-space: nowrap; }
+
+/* ---------- stages ---------- */
+.stage {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 22px;
+  text-align: center; padding: 40px;
+  animation: fade .45s ease;
+}
+.stage.hidden { display: none; }
+@keyframes fade { from { opacity: 0; transform: translateY(14px); } }
+
+.stage h1 { font-size: clamp(30px, 4.4vw, 62px); margin: 0; font-weight: 600; }
+.stage p  { font-size: clamp(15px, 1.5vw, 22px); margin: 0; opacity: .62; }
+
+.pulse-ring {
+  width: 116px; height: 116px; border-radius: 50%;
+  border: 3px solid var(--gold);
+  animation: pulse 2.1s ease-out infinite;
+}
+@keyframes pulse {
+  0%   { transform: scale(.8); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.meter { width: min(440px, 62vw); height: 8px; border-radius: 99px; background: #ffffff22; overflow: hidden; }
+#meter-fill { height: 100%; width: 0%; background: var(--gold); transition: width .12s linear; }
+
+#count {
+  font-size: clamp(140px, 26vw, 340px); font-weight: 800; line-height: 1;
+  color: var(--gold); text-shadow: 0 0 90px #e0a63c88;
+  animation: pop .55s ease;
+}
+@keyframes pop { from { transform: scale(1.5); opacity: 0; } }
+
+.spinner {
+  width: 74px; height: 74px; border-radius: 50%;
+  border: 5px solid #ffffff1f; border-top-color: var(--gold);
+  animation: spin .95s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#gen-timer { font-size: 14px; opacity: .38; letter-spacing: .1em; }
+
+/* ---------- result ---------- */
+#stage-result { flex-direction: row; gap: 52px; background: #0b0a09f2; }
+#result-img {
+  max-height: 84vh; max-width: 62vw;
+  border-radius: 14px; box-shadow: 0 26px 90px #000c;
+  animation: rise .6s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(40px) scale(.95); } }
+
+#result-side { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+#result-side h2 { font-size: 30px; margin: 0; color: var(--gold); font-weight: 600; }
+#qr { width: 220px; height: 220px; border-radius: 12px; background: #fff; padding: 10px; }
+#result-side p { font-size: 18px; line-height: 1.5; }
+#result-side span { font-size: 14px; opacity: .55; }
+
+button {
+  margin-top: 6px; padding: 15px 40px; border: 0; border-radius: 999px;
+  background: var(--gold); color: #100e0c;
+  font-size: 17px; font-weight: 700; cursor: pointer;
+  font-family: inherit;
+}
+button:hover { filter: brightness(1.1); }
+
+#err-msg { max-width: 720px; opacity: .72; line-height: 1.55; font-size: 17px; }
+
+#flash {
+  position: fixed; inset: 0; z-index: 60; background: #fff;
+  opacity: 0; pointer-events: none;
+}
+#flash.fire { animation: flash .42s ease-out; }
+@keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
+
+@media (max-aspect-ratio: 1/1) {
+  #stage-result { flex-direction: column; gap: 22px; }
+  #result-img { max-width: 92vw; max-height: 58vh; }
+  #qr { width: 150px; height: 150px; }
+}

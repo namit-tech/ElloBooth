@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Photo Booth</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<div id="vignette"></div>
+
+<header id="bar">
+  <div id="scenes"></div>
+  <div id="hint">SPACE = capture &nbsp;·&nbsp; F = fullscreen &nbsp;·&nbsp; 1-9 = scene</div>
+</header>
+
+<!-- Idle -->
+<section class="stage" id="stage-idle">
+  <div class="pulse-ring"></div>
+  <h1 id="idle-title">आइए, कैमरे के सामने खड़े हों</h1>
+  <p id="idle-sub">Step in front of the camera</p>
+</section>
+
+<!-- Person detected, settling -->
+<section class="stage hidden" id="stage-detect">
+  <h1>बस, ऐसे ही रुकिए…</h1>
+  <div class="meter"><div id="meter-fill"></div></div>
+  <p>Hold still</p>
+</section>
+
+<!-- Countdown -->
+<section class="stage hidden" id="stage-count">
+  <div id="count">3</div>
+</section>
+
+<!-- Generating -->
+<section class="stage hidden" id="stage-gen">
+  <div class="spinner"></div>
+  <h1 id="gen-title">आपकी तस्वीर तैयार हो रही है…</h1>
+  <p id="gen-sub">Creating your photo</p>
+  <div id="gen-timer">0.0s</div>
+</section>
+
+<!-- Result -->
+<section class="stage hidden" id="stage-result">
+  <img id="result-img" alt="Your photo">
+  <aside id="result-side">
+    <h2 id="result-title"></h2>
+    <img id="qr" alt="Scan to download">
+    <p>फ़ोन से स्कैन कीजिए<br><span>Scan to download</span></p>
+    <button id="again">फिर से / Again</button>
+  </aside>
+</section>
+
+<!-- Error -->
+<section class="stage hidden" id="stage-error">
+  <h1>अरे! कुछ गड़बड़ हो गई</h1>
+  <p id="err-msg"></p>
+  <button id="retry">फिर से कोशिश करें</button>
+</section>
+
+<div id="flash"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
