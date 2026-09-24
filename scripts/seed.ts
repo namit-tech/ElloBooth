@@ -20,7 +20,7 @@ const GLOBAL_SCENES = [
     scene:
       'A grand temple sanctum. The divine figure from IMAGE 2 is enthroned on a decorated altar on the left, surrounded by marigold and rose garlands, brass oil lamps, and soft golden light rays falling from above. Warm devotional atmosphere, incense haze in the air.',
     pose:
-      'Place the visitor from IMAGE 1 standing on the right side of the frame, in front of and slightly below the altar, turned three-quarters toward the divine figure. Their palms are pressed together at chest height in a namaskar gesture, head bowed slightly, eyes lowered in reverence. Their expression is calm and devotional. Both figures are fully visible in one frame.',
+      'Place the visitor from IMAGE 1 standing on the right side of the frame, in front of and slightly below the altar, their body angled slightly toward the altar but their head upright and their face turned to the camera at close to a full frontal angle, clearly lit and unobstructed. Their palms are pressed together at chest height in a namaskar gesture and their expression is calm and devotional - the reverence is carried by the folded hands, not by a lowered head. Both figures are fully visible in one frame.',
     mood:
       'Warm golden-hour devotional lighting, rich saturated temple colours, shallow depth of field, shot like a respectful professional temple photograph.',
   },
@@ -33,7 +33,7 @@ const GLOBAL_SCENES = [
     scene:
       'A serene white marble Jain temple interior. The figure from IMAGE 2 is seated in meditation on a raised marble pedestal on the left, framed by intricately carved arches, with soft diffused daylight and a calm minimal palette of white, cream and pale gold.',
     pose:
-      'Place the visitor from IMAGE 1 on the right, standing a respectful distance from the pedestal, body turned toward the seated figure, palms joined together at the chest in a namaskar gesture, head gently bowed, peaceful expression. Both figures fully visible in one frame.',
+      'Place the visitor from IMAGE 1 on the right, standing a respectful distance from the pedestal, their body angled slightly toward the seated figure but their head upright and their face turned to the camera at close to a full frontal angle, clearly lit and unobstructed. Palms joined together at the chest in a namaskar gesture, peaceful expression - the reverence is carried by the folded hands, not by a lowered head. Both figures fully visible in one frame.',
     mood:
       'Soft, clean, diffused natural light. Serene and minimal. Low contrast, gentle shadows, tranquil and dignified.',
   },
@@ -88,6 +88,35 @@ async function backfillFaceSettings() {
     { $set: { 'settings.realFace': true, 'settings.identityLock': false } },
   );
   if (real.modifiedCount) console.log(`Enabled real-face blending on ${real.modifiedCount} tenant(s)`);
+}
+
+/**
+ * The two devotional scenes were written before the face transplant existed and
+ * still ask for a bowed head, lowered eyes and a three-quarter turn. That is a
+ * face the transplant cannot use: it aligns a near-frontal capture onto the
+ * generated head, and a head turned away has features the capture never saw.
+ * Every photo from those scenes therefore kept the face the model drew.
+ *
+ * Devotion reads just as clearly from folded hands, which is why the scene
+ * drafter has told tenants to write it that way for a long time - these two
+ * rows simply predate that rule. Only wording that still carries the old
+ * instruction is replaced, so a tenant's deliberate edit is left alone.
+ */
+async function realignDeityPoses() {
+  const stale = /bowed|eyes lowered|three-quarters/i;
+  let fixed = 0;
+
+  for (const scene of GLOBAL_SCENES) {
+    const existing = await Scene.findOne({ tenantId: null, name: scene.name });
+    if (!existing || existing.pose === scene.pose || !stale.test(existing.pose)) continue;
+
+    existing.pose = scene.pose;
+    await existing.save();
+    fixed++;
+    console.log(`Rewrote the pose for "${scene.name}" so the face stays frontal`);
+  }
+
+  if (!fixed) console.log('Scene poses: nothing to realign');
 }
 
 /**
@@ -153,6 +182,7 @@ async function main() {
     }
   }
   console.log(`Global scenes: ${added} added, ${GLOBAL_SCENES.length - added} already present`);
+  await realignDeityPoses();
 
   // ---- Demo tenant ------------------------------------------------
   let demo = await Tenant.findOne({ slug: 'demo' });

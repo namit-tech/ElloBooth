@@ -89,6 +89,12 @@ const SceneInput = z.object({
   scene: z.string().trim().min(20, 'The scene description is too short').max(1500),
   pose: z.string().trim().min(20, 'The pose description is too short').max(1500),
   mood: z.string().trim().max(800).optional().default(''),
+  // Absent on the older form, which is why it defaults rather than being
+  // required - a scene saved without it keeps generating exactly as before.
+  mode: z.enum(['generate', 'composite']).optional().default('generate'),
+  anchorX: z.coerce.number().min(0).max(1).optional().default(0.72),
+  anchorBottom: z.coerce.number().min(0).max(1.5).optional().default(1),
+  personHeight: z.coerce.number().min(0.1).max(1.5).optional().default(0.88),
 });
 
 export async function saveScene(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -96,7 +102,11 @@ export async function saveScene(_prev: ActionState, formData: FormData): Promise
 
   const parsed = SceneInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the form' };
-  const input = parsed.data;
+  const { anchorX, anchorBottom, personHeight, ...rest } = parsed.data;
+  const input = {
+    ...rest,
+    placement: { anchorX, anchorBottom, height: personHeight },
+  };
 
   await connectDB();
   const id = String(formData.get('sceneId') ?? '');
@@ -142,8 +152,9 @@ export async function deleteScene(formData: FormData): Promise<void> {
   if (!scene) return;
 
   await Scene.deleteOne({ _id: id, ...filter });
-  // Past photos keep their own stored files; only the reference goes.
+  // Past photos keep their own stored files; only the scene's own assets go.
   await remove(scene.referenceKey).catch(() => {});
+  if (scene.backplateKey) await remove(scene.backplateKey).catch(() => {});
   await AuditLog.create({
     actorEmail: session.email,
     action: 'scene.delete',
@@ -157,4 +168,41 @@ export async function deleteScene(formData: FormData): Promise<void> {
 /** Serves a tenant's own reference image to their dashboard. */
 export async function referenceMime(key: string): Promise<ImageMime> {
   return mimeFor(key);
+}
+
+/* ------------------------------------------------------------------ */
+/* Backplate - the finished background a composite scene stands the     */
+/* visitor in. Nothing to do with the reference image, which is what    */
+/* the generative path shows the model.                                 */
+/* ------------------------------------------------------------------ */
+export async function saveBackplate(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { tenantId, filter, session } = await requireTenant('tenant_admin');
+
+  const id = String(formData.get('sceneId') ?? '');
+  if (!Types.ObjectId.isValid(id)) return { error: 'Save the scene first, then add its backplate.' };
+
+  const read = await readUpload(formData.get('backplate'));
+  if (typeof read === 'string') return { error: read };
+
+  await connectDB();
+  const scene = await Scene.findOne({ _id: id, ...filter }).lean<IScene>();
+  if (!scene) return { error: 'That scene is not yours to edit' };
+
+  const key = makeKey(String(tenantId), 'refs', `plate-${randomToken(8)}.${read.mime.split('/')[1]}`);
+  await put(key, read.bytes);
+
+  const previous = scene.backplateKey;
+  await Scene.updateOne({ _id: id, ...filter }, { $set: { backplateKey: key } });
+  // Replaced, so the old file would otherwise sit in storage forever.
+  if (previous && previous !== key) await remove(previous).catch(() => {});
+
+  await AuditLog.create({
+    actorEmail: session.email,
+    action: 'scene.backplate.set',
+    tenantId,
+    meta: { id, name: scene.name },
+  });
+
+  revalidatePath('/dashboard/scenes');
+  return { ok: `Backplate saved for "${scene.name}".` };
 }

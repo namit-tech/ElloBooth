@@ -60,6 +60,15 @@ export default async function ScenesPage() {
                     <div className="row" style={{ gap: 8 }}>
                       <strong>{s.name}</strong>
                       <span className="badge neutral">{s.aspectRatio}</span>
+                      {/* Readable without opening the editor, so a saved mode
+                          is visibly saved rather than something to go and
+                          check. A composite scene with no backplate cannot
+                          produce anything, so it says so here. */}
+                      {s.mode === 'composite' ? (
+                        <span className={`badge ${s.backplateKey ? 'gold' : 'suspended'}`}>
+                          {s.backplateKey ? 'composite' : 'composite — no backplate'}
+                        </span>
+                      ) : null}
                       {!ready.get(id) ? <span className="badge suspended">no image</span> : null}
                       {!s.active ? <span className="badge neutral">hidden</span> : null}
                     </div>
@@ -79,6 +88,11 @@ export default async function ScenesPage() {
                           pose: s.pose,
                           mood: s.mood ?? '',
                           referenceKey: s.referenceKey,
+                          mode: s.mode ?? 'generate',
+                          hasBackplate: !!s.backplateKey,
+                          anchorX: s.placement?.anchorX ?? 0.72,
+                          anchorBottom: s.placement?.anchorBottom ?? 1,
+                          personHeight: s.placement?.height ?? 0.88,
                         }}
                       />
                       <form action={toggleScene}>

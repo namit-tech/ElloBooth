@@ -7,6 +7,14 @@
   color: #f6efe3;
   font-family: "Segoe UI", system-ui, sans-serif;
   user-select: none;
+}
+
+/* The cursor has no place on a screen a visitor is standing in front of, but
+   hiding it outright left the operator unable to see what they were clicking
+   when something went wrong - including the retry button on the error screen.
+   It follows the mouse instead: visible while it moves, gone once it settles. */
+.booth.at-rest,
+.booth.at-rest * {
   cursor: none;
 }
 
@@ -236,3 +244,53 @@
   .booth .result img.shot { max-width: 92vw; max-height: 56vh; }
   .booth .side img.qr { width: 145px; height: 145px; }
 }
+
+/* ---------------- pose guide ----------------
+   A composite scene photographs the visitor exactly as they stand, with no
+   prompt in between telling a model to join their hands - so the booth asks,
+   and shows them where. Everyone standing in the same outline also keeps the
+   cut-out a consistent size from one visitor to the next, which is what makes
+   the placement settings hold still. */
+.guide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 6vh;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* Head-and-shoulders through to waist: the framing a darshan photo wants. */
+.guide-body {
+  position: absolute;
+  top: 12vh;
+  bottom: 18vh;
+  aspect-ratio: 0.62;
+  border: 3px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 46% 46% 30% 30% / 34% 34% 12% 12%;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.22);
+}
+
+.guide-say {
+  position: relative;
+  margin: 0;
+  padding: 14px 30px;
+  border-radius: 999px;
+  background: rgba(16, 14, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.guide-icon { margin-right: 12px; }
+.guide-say small { display: block; font-size: 16px; font-weight: 400; opacity: 0.6; }
+
+/* Out of the way once the countdown owns the screen. */
+.booth .stage { z-index: 2; }

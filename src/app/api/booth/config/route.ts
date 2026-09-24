@@ -29,8 +29,14 @@ export async function GET(req: Request) {
         subtitle: s.subtitle ?? '',
         aspectRatio: s.aspectRatio,
         own: s.tenantId != null,
-        // Lets the booth grey out scenes whose reference image was never uploaded.
-        ready: await exists(s.referenceKey),
+        /* Lets the booth grey out scenes that cannot produce anything.
+           What counts as missing depends on how the scene makes its photo: a
+           composite scene never shows the model a reference image, so judging
+           it by one greyed out scenes that were perfectly ready to shoot. */
+        ready:
+          s.mode === 'composite'
+            ? !!s.backplateKey && (await exists(s.backplateKey))
+            : await exists(s.referenceKey),
       })),
     );
 
@@ -45,8 +51,9 @@ export async function GET(req: Request) {
         autoCaptureSeconds: tenant.settings.autoCaptureSeconds,
         countdownSeconds: tenant.settings.countdownSeconds,
         resultDisplaySeconds: tenant.settings.resultDisplaySeconds,
+        // realFace is deliberately not sent: the transplant happens on the
+        // server now, so a booth has nothing to do with the setting.
         consentText: tenant.settings.consentText,
-        realFace: tenant.settings.realFace,
       },
       // Shown so staff can top up before the queue stalls; booths on their own
       // key have no platform balance to report.

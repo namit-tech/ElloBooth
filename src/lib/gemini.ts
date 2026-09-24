@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { explain, redact } from '@/lib/ai/errors';
 import type { IScene } from '@/models';
 
 /**
@@ -163,9 +164,7 @@ async function runImageCall(opts: CallOpts): Promise<GenerateResult> {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    // Never let a provider error echo the key back into logs or responses.
-    return { ok: false, reason: message.replace(/AIza[\w-]+/g, 'AIza…'), ms: Date.now() - startedAt };
+    return { ok: false, reason: explain(err, opts.apiKey, 'Google'), ms: Date.now() - startedAt };
   }
 
   const ms = Date.now() - startedAt;
@@ -243,15 +242,16 @@ export async function probeKey(
     await new GoogleGenAI({ apiKey }).models.get({ model });
     return { ok: true };
   } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
-    const message = raw.replace(/AIza[\w-]+/g, 'AIza…');
+    const message = redact(err instanceof Error ? err.message : String(err), apiKey);
+    // Worded for someone pasting a key into Settings, which is more specific
+    // than the generic advice `explain` gives for the same statuses.
     if (/401|403|API_KEY|api key|unauthenticated|permission/i.test(message)) {
       return { ok: false, reason: 'That key was rejected by Google. Check you copied all of it.' };
     }
     if (/404|not found/i.test(message)) {
       return { ok: false, reason: `The key works, but "${model}" is not available on that account.` };
     }
-    return { ok: false, reason: message.slice(0, 300) };
+    return { ok: false, reason: explain(err, apiKey, 'Google') };
   }
 }
 
@@ -285,7 +285,6 @@ export async function describe(opts: {
     }
     return text.trim() ? { ok: true, text } : { ok: false, reason: 'The model returned nothing to read.' };
   } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
-    return { ok: false, reason: raw.replace(/AIza[\w-]+/g, 'AIza…').slice(0, 300) };
+    return { ok: false, reason: explain(err, opts.apiKey, 'Google') };
   }
 }

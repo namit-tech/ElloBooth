@@ -8,6 +8,7 @@ import { requireDevice, HttpError } from '@/lib/rbac';
 import { reserveCredit, refundCredit, costOf, creditsNeeded } from '@/lib/credits';
 import { buildPrompt, mimeFor, OUTPUT_MIME, OUTPUT_EXT } from '@/lib/gemini';
 import { resolveApiKey, generateImage, refineFace, providerOf, modelFor } from '@/lib/ai';
+import { swapFace, composeScene, faceSwapConfigured, type SwapDetail } from '@/lib/faceswap';
 import { get, put, makeKey } from '@/lib/storage';
 import { randomToken } from '@/lib/crypto';
 
@@ -60,6 +61,101 @@ export async function POST(req: Request) {
   if (!scene) {
     return NextResponse.json({ error: 'That scene is not available on this account' }, { status: 404 });
   }
+
+  /* ================= Composite scenes =================
+     A composite scene never reaches the image model. The visitor is cut out of
+     the capture and stood in a prepared backplate, so the deity is identical in
+     every photograph and the visitor is their own photograph rather than a
+     drawing of one.
+
+     Deliberately written as a self-contained branch rather than threaded
+     through the generative path below: everything after this point - credits,
+     API keys, two model passes, the face transplant - has no part in it, and
+     keeping them apart means this block can be deleted to go back to exactly
+     the previous behaviour.
+
+     No credit is reserved or spent. There is no provider call to pay for. */
+  if (scene.mode === 'composite') {
+    if (!scene.backplateKey) {
+      return NextResponse.json(
+        {
+          error: `No backplate for "${scene.name}"`,
+          detail: 'This scene is set to composite. Upload its backplate image in Scenes.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const plateBytes = await get(scene.backplateKey);
+    if (!plateBytes) {
+      return NextResponse.json(
+        {
+          error: `The backplate for "${scene.name}" is missing`,
+          detail: 'Re-upload it in Scenes.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const composed = await composeScene({
+      person: imageBase64,
+      plate: plateBytes.toString('base64'),
+      placement: scene.placement,
+    });
+
+    if (!composed.ok) {
+      await Generation.create({
+        tenantId,
+        deviceId,
+        sceneId: scene._id,
+        model: 'composite',
+        keyMode: tenant.keyMode,
+        status: 'error',
+        ms: composed.ms,
+        costUsd: 0,
+        error: composed.reason.slice(0, 500),
+      });
+
+      return NextResponse.json(
+        { error: 'The photo could not be created', detail: composed.reason.slice(0, 400) },
+        { status: 422 },
+      );
+    }
+
+    const shareToken = randomToken(18);
+    const imageKey = makeKey(String(tenantId), 'photos', `${shareToken}${OUTPUT_EXT}`);
+    await put(imageKey, Buffer.from(composed.image, 'base64'));
+
+    const retentionDays = tenant.settings.retentionDays;
+    await Generation.create({
+      tenantId,
+      deviceId,
+      sceneId: scene._id,
+      model: 'composite',
+      keyMode: tenant.keyMode,
+      status: 'ok',
+      ms: composed.ms,
+      costUsd: 0,
+      imageKey,
+      // The visitor's own pixels, by construction - there was never a drawn
+      // face to replace.
+      realFace: true,
+      realFaceMs: composed.ms,
+      faceDetail: composed.detail,
+      shareToken,
+      expiresAt: retentionDays > 0 ? new Date(Date.now() + retentionDays * 86_400_000) : undefined,
+    });
+
+    const shareUrl = `${baseUrl(req)}/photo/${shareToken}`;
+    return NextResponse.json({
+      shareToken,
+      imageUrl: `/api/photo/${shareToken}`,
+      shareUrl,
+      qr: await QRCode.toDataURL(shareUrl, { margin: 1, width: 320 }),
+      ms: composed.ms,
+    });
+  }
+  /* =============== end composite scenes =============== */
 
   const referenceBytes = await get(scene.referenceKey);
   if (!referenceBytes) {
@@ -135,7 +231,7 @@ export async function POST(req: Request) {
      Pass 1 already produced a usable photo. If this second pass fails for any
      reason the visitor still gets that photo - a worse face beats no photo at
      a live event - and the unused credit is returned. */
-  let finalImage = result.image;
+  let composed = result.image;
   let refineError: string | undefined;
   let refineMs = 0;
 
@@ -152,7 +248,7 @@ export async function POST(req: Request) {
     refineMs = refined.ms;
 
     if (refined.ok) {
-      finalImage = refined.image;
+      composed = refined.image;
     } else {
       refineError = refined.reason.slice(0, 500);
       console.warn(`[identity-lock] ${scene.name}: ${refineError}`);
@@ -160,16 +256,56 @@ export async function POST(req: Request) {
     }
   }
 
+  /* -------- Put the visitor's actual face in --------
+     The model draws a face rather than copying one, so no prompt gets the
+     likeness past roughly 85-90%. The face service replaces that region with
+     the real pixels from the capture.
+
+     It runs here rather than in the booth for two reasons: photos generated
+     from the offline queue get it too, which the browser-side version never
+     did, and the image stored behind the QR link is the same one shown on
+     screen instead of a second upload racing it.
+
+     The scene's reference goes along so the service can tell which face in the
+     photo is the visitor and which belongs to the deity or celebrity that must
+     keep its own. Any failure leaves the model's photo untouched. */
+  let finalImage = composed;
+  let realFaceOk = false;
+  let realFaceError: string | undefined;
+  let realFaceMs = 0;
+  let faceDetail: SwapDetail | undefined;
+
+  if (tenant.settings.realFace && faceSwapConfigured()) {
+    const swapped = await swapFace({
+      target: composed,
+      source: imageBase64,
+      avoid: referenceBytes.toString('base64'),
+    });
+    realFaceMs = swapped.ms;
+    faceDetail = swapped.detail;
+
+    if (swapped.ok) {
+      finalImage = swapped.image;
+      realFaceOk = true;
+    } else {
+      realFaceError = swapped.reason.slice(0, 500);
+      console.warn(`[real-face] ${scene.name}: ${realFaceError}`);
+    }
+  }
+
   const shareToken = randomToken(18);
   const imageKey = makeKey(String(tenantId), 'photos', `${shareToken}${OUTPUT_EXT}`);
   await put(imageKey, Buffer.from(finalImage, 'base64'));
 
-  // Keep pass 1's output alongside it so the tenant can judge whether identity
-  // lock is actually earning its extra credit.
+  /* The "before" side of the dashboard comparison: the photo one improvement
+     step earlier. Once the real face is in, that is the model's own rendering
+     of the visitor, which is the comparison actually worth looking at.
+     Otherwise it is pass 1, kept so identity lock's extra credit can be judged. */
+  const before = realFaceOk ? composed : identityLock && !refineError ? result.image : null;
   let imageKeyRaw: string | undefined;
-  if (identityLock && !refineError) {
+  if (before) {
     imageKeyRaw = makeKey(String(tenantId), 'photos', `${shareToken}-raw${OUTPUT_EXT}`);
-    await put(imageKeyRaw, Buffer.from(result.image, 'base64'));
+    await put(imageKeyRaw, Buffer.from(before, 'base64'));
   }
 
   const costUsd = costOf(model) * (identityLock && !refineError ? 2 : 1);
@@ -182,12 +318,16 @@ export async function POST(req: Request) {
     model,
     keyMode: tenant.keyMode,
     status: 'ok',
-    ms: result.ms + refineMs,
+    ms: result.ms + refineMs + realFaceMs,
     costUsd,
     imageKey,
     imageKeyRaw,
     identityLock,
     refineError,
+    realFace: realFaceOk,
+    realFaceMs,
+    realFaceError,
+    faceDetail,
     shareToken,
     expiresAt: retentionDays > 0 ? new Date(Date.now() + retentionDays * 86_400_000) : undefined,
   });
@@ -199,6 +339,6 @@ export async function POST(req: Request) {
     imageUrl: `/api/photo/${shareToken}`,
     shareUrl,
     qr: await QRCode.toDataURL(shareUrl, { margin: 1, width: 320 }),
-    ms: result.ms + refineMs,
+    ms: result.ms + refineMs + realFaceMs,
   });
 }

@@ -158,8 +158,8 @@ export default function SettingsForm({
             <strong>Use the visitor&apos;s real face (recommended)</strong>
             <small>
               {realFace
-                ? 'On — the booth lifts the actual face from the capture and blends it into the photo. Adds about 2 seconds, costs nothing, and works offline.'
-                : 'Off — the photo keeps whatever face the AI drew.'}
+                ? 'On — the visitor’s actual face from the capture is transplanted into the finished photo. Adds about 2 seconds and costs nothing. Needs the face service to be running.'
+                : 'Off — the photo keeps whatever face the AI drew, which never looks quite like the visitor.'}
             </small>
           </span>
         </label>

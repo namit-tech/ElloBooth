@@ -6,3 +6,6 @@ storage/
 !storage/.gitkeep
 next-env.d.ts
 *.tsbuildinfo
+face-service/.venv/
+face-service/__pycache__/
+backplates/

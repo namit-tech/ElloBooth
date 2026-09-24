@@ -1,0 +1,13 @@
+# Python 3.11 or 3.12. MediaPipe does not publish wheels for 3.13 yet, so
+# `py -3.11 -m venv .venv` on a machine that has both.
+#
+# OpenCV is deliberately NOT listed. MediaPipe depends on opencv-contrib-python
+# and installing a second opencv distribution alongside it leaves two copies of
+# the cv2 module fighting over the same import name. The one MediaPipe brings
+# already contains seamlessClone.
+
+mediapipe>=0.10.18,<0.11
+scipy>=1.11
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9

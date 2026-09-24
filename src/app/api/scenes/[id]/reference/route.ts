@@ -16,7 +16,7 @@ import { mimeFor } from '@/lib/gemini';
 
 export const runtime = 'nodejs';
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { tenantId } = await requireTenant('operator');
     const { id } = await ctx.params;
@@ -29,12 +29,22 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     }).lean<IScene>();
     if (!scene) return new NextResponse('Not found', { status: 404 });
 
-    const bytes = await get(scene.referenceKey);
-    if (!bytes) return new NextResponse('No reference image uploaded', { status: 404 });
+    // ?plate=1 serves the composite backplate instead. Same scene, same tenant
+    // scope, so it needs no separate route or permission of its own.
+    const wantsPlate = new URL(req.url).searchParams.get('plate') === '1';
+    const key = wantsPlate ? scene.backplateKey : scene.referenceKey;
+    if (!key) return new NextResponse('No backplate uploaded', { status: 404 });
+
+    const bytes = await get(key);
+    if (!bytes) {
+      return new NextResponse(wantsPlate ? 'No backplate uploaded' : 'No reference image uploaded', {
+        status: 404,
+      });
+    }
 
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
-        'Content-Type': mimeFor(scene.referenceKey),
+        'Content-Type': mimeFor(key),
         'Cache-Control': 'private, max-age=300',
       },
     });

@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@google/genai": "^2.18.0",
-    "@mediapipe/tasks-vision": "^1.0.1",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "jose": "^6.2.10",

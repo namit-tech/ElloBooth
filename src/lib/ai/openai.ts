@@ -1,4 +1,5 @@
 import OpenAI, { toFile } from 'openai';
+import { explain, redact } from './errors';
 import type { GenerateResult, ImagePart } from '@/lib/gemini';
 import type { ImageSize } from './catalogue';
 
@@ -66,9 +67,7 @@ async function runEdit(opts: {
     }
     return { ok: true, image, ms };
   } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
-    // Never let a provider error echo the key back into logs or responses.
-    return { ok: false, reason: raw.replace(/sk-[\w-]+/g, 'sk-…').slice(0, 400), ms: Date.now() - startedAt };
+    return { ok: false, reason: explain(err, opts.apiKey, 'OpenAI'), ms: Date.now() - startedAt };
   }
 }
 
@@ -135,8 +134,7 @@ export async function describe(opts: {
     const text = response.output_text ?? '';
     return text.trim() ? { ok: true, text } : { ok: false, reason: 'OpenAI returned nothing to read.' };
   } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
-    return { ok: false, reason: raw.replace(/sk-[\w-]+/g, 'sk-…').slice(0, 300) };
+    return { ok: false, reason: explain(err, opts.apiKey, 'OpenAI') };
   }
 }
 
@@ -146,14 +144,15 @@ export async function probeKey(apiKey: string, model: string): Promise<{ ok: tru
     await new OpenAI({ apiKey }).models.retrieve(model);
     return { ok: true };
   } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
-    const message = raw.replace(/sk-[\w-]+/g, 'sk-…');
+    const message = redact(err instanceof Error ? err.message : String(err), apiKey);
+    // Worded for someone pasting a key into Settings, which is more specific
+    // than the generic advice `explain` gives for the same statuses.
     if (/401|invalid_api_key|incorrect api key|unauthorized/i.test(message)) {
       return { ok: false, reason: 'That key was rejected by OpenAI. Check you copied all of it.' };
     }
     if (/404|does not exist|not found/i.test(message)) {
       return { ok: false, reason: `The key works, but "${model}" is not available on that account.` };
     }
-    return { ok: false, reason: message.slice(0, 300) };
+    return { ok: false, reason: explain(err, apiKey, 'OpenAI') };
   }
 }

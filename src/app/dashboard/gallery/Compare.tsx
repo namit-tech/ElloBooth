@@ -14,6 +14,7 @@ export default function Compare({
   takenAt,
   seconds,
   failed,
+  rawLabel,
 }: {
   token: string;
   hasRaw: boolean;
@@ -21,6 +22,8 @@ export default function Compare({
   takenAt: string;
   seconds: string;
   failed: boolean;
+  /** What the "before" side actually shows - it depends which step ran. */
+  rawLabel: string;
 }) {
   const [showRaw, setShowRaw] = useState(false);
 
@@ -35,8 +38,11 @@ export default function Compare({
         <div className="tile-head">
           <strong>{sceneName}</strong>
           {hasRaw ? (
+            /* Names what is on screen, not what clicking would show. The other
+               way round reads as a label for the picture you are looking at and
+               sends people away arguing about the wrong image. */
             <button className="flip" onClick={() => setShowRaw((v) => !v)}>
-              {showRaw ? 'Corrected' : 'Before'}
+              {showRaw ? 'showing: before' : 'showing: after'}
             </button>
           ) : failed ? (
             <span className="badge neutral">1 pass</span>
@@ -44,7 +50,7 @@ export default function Compare({
         </div>
         <small>
           {takenAt} · {seconds}s
-          {showRaw ? ' · showing pass 1, before face correction' : ''}
+          {showRaw ? ` · ${rawLabel}` : ''}
         </small>
       </figcaption>
     </figure>

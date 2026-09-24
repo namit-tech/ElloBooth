@@ -20,6 +20,14 @@ export default async function GalleryPage() {
   const withBoth = photos.filter((p) => p.imageKeyRaw).length;
   const refineFailed = photos.filter((p) => p.identityLock && p.refineError).length;
 
+  /* The face transplant used to fail into a console warning nobody reads, so a
+     booth could serve AI faces all evening and look fine. Surfaced here as a
+     plain count, with the service's own reason attached. */
+  const realFaceOn = tenant.settings.realFace;
+  const swapped = photos.filter((p) => p.realFace).length;
+  const swapFailed = photos.filter((p) => p.realFaceError).length;
+  const commonReason = photos.find((p) => p.realFaceError)?.realFaceError;
+
   return (
     <>
       <div className="page-head">
@@ -33,6 +41,21 @@ export default async function GalleryPage() {
           </p>
         </div>
       </div>
+
+      {realFaceOn && photos.length > 0 ? (
+        <div className={`notice ${swapFailed > swapped ? 'warn' : 'info'}`} style={{ marginBottom: 18 }}>
+          <strong>{swapped}</strong> of {photos.length} photo{photos.length === 1 ? '' : 's'} carry the
+          visitor&apos;s real face.
+          {swapFailed > 0 ? (
+            <>
+              {' '}
+              <strong>{swapFailed}</strong> kept the face the AI drew
+              {commonReason ? <> — most recently: &ldquo;{commonReason}&rdquo;</> : null}. Check that the face
+              service is running.
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {withBoth > 0 ? (
         <div className="notice info" style={{ marginBottom: 18 }}>
@@ -64,6 +87,11 @@ export default async function GalleryPage() {
               takenAt={new Date(p.createdAt).toLocaleString('en-IN')}
               seconds={(p.ms / 1000).toFixed(1)}
               failed={!!p.refineError}
+              rawLabel={
+                p.realFace
+                  ? 'showing the face the AI drew, before the visitor’s own went in'
+                  : 'showing pass 1, before face correction'
+              }
             />
           ))}
         </div>

@@ -160,6 +160,27 @@ const DeviceSchema = new Schema<IDevice>(
 /* ------------------------------------------------------------------ */
 /* Scene - tenantId null means it is in the global Elloindia library.   */
 /* ------------------------------------------------------------------ */
+/**
+ * How a scene's photograph gets made.
+ *
+ * `generate` asks an image model to draw the whole picture from the capture and
+ * the reference, then transplants the visitor's real face back into it.
+ *
+ * `composite` cuts the visitor out of the capture and stands them in a fixed
+ * backplate. Nothing is drawn, so the deity looks identical in every photo and
+ * the visitor is their own photograph rather than a likeness of it. It needs a
+ * backplate prepared for the scene, and everyone gets the same background -
+ * which for a darbar is the point.
+ */
+export type SceneMode = 'generate' | 'composite';
+
+/** Where the visitor stands in a composite scene, as fractions of the plate. */
+export interface IPlacement {
+  anchorX: number;
+  anchorBottom: number;
+  height: number;
+}
+
 export interface IScene {
   _id: Types.ObjectId;
   tenantId: Types.ObjectId | null;
@@ -170,6 +191,11 @@ export interface IScene {
   scene: string;
   pose: string;
   mood: string;
+  /** Defaults to 'generate', so existing scenes keep behaving exactly as before. */
+  mode?: SceneMode;
+  /** The finished background a composite scene stands the visitor in. */
+  backplateKey?: string;
+  placement?: IPlacement;
   active: boolean;
   order: number;
   createdAt: Date;
@@ -186,6 +212,15 @@ const SceneSchema = new Schema<IScene>(
     scene: { type: String, required: true },
     pose: { type: String, required: true },
     mood: { type: String, default: '' },
+    mode: { type: String, enum: ['generate', 'composite'], default: 'generate' },
+    backplateKey: String,
+    placement: {
+      // Right of centre and full height suits a single visitor beside an altar,
+      // which is what every scene in the library is so far.
+      anchorX: { type: Number, default: 0.72, min: 0, max: 1 },
+      anchorBottom: { type: Number, default: 1, min: 0, max: 1.5 },
+      height: { type: Number, default: 0.88, min: 0.1, max: 1.5 },
+    },
     active: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
   },
@@ -211,9 +246,19 @@ export interface IGeneration {
   identityLock?: boolean;
   /** Set when identity lock was attempted but did not succeed. */
   refineError?: string;
-  /** True once the booth blended the visitor's real face into the photo. */
+  /** True once the visitor's real face was transplanted into the photo. */
   realFace?: boolean;
   realFaceMs?: number;
+  /** Set when the transplant was attempted but did not succeed. */
+  realFaceError?: string;
+  /**
+   * What the face service saw: how many faces were in the photo, which one it
+   * picked, how strongly each resembled the visitor, and how much the capture's
+   * face had to be enlarged. Kept because the previous browser-side blend
+   * failed silently into a console warning, so nobody could tell a booth that
+   * was working from one that had been serving AI faces all evening.
+   */
+  faceDetail?: Record<string, unknown>;
   /** Unguessable id used in the QR link, so photos cannot be enumerated. */
   shareToken?: string;
   error?: string;
@@ -238,6 +283,8 @@ const GenerationSchema = new Schema<IGeneration>(
     refineError: String,
     realFace: Boolean,
     realFaceMs: Number,
+    realFaceError: String,
+    faceDetail: Schema.Types.Mixed,
     shareToken: { type: String, index: true, sparse: true },
     error: String,
     expiresAt: Date,

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { enqueue, flush, count as queueCount } from './queue';
-import { blendRealFace, preloadFaceModel } from './faceblend';
 
 type Scene = { id: string; name: string; subtitle: string; aspectRatio: string; own: boolean; ready: boolean };
 type Config = {
@@ -13,7 +12,6 @@ type Config = {
     countdownSeconds: number;
     resultDisplaySeconds: number;
     consentText: string;
-    realFace: boolean;
   };
   credits: number | null;
   scenes: Scene[];
@@ -28,6 +26,13 @@ const GEN_MESSAGES = [
   ['बस कुछ ही पल…', 'Almost there'],
 ];
 
+/**
+ * Longest edge of the capture sent for generation. 1080p passes through
+ * untouched; the cap only exists so a 4K webcam does not push a 3 MB request
+ * through a venue's uplink for detail no face needs.
+ */
+const CAPTURE_MAX = 2560;
+
 /* Presence detection tuning - see the loop below. */
 const DW = 80;
 const DH = 60;
@@ -36,33 +41,6 @@ const EMPTY = 0.06;
 const STILL = 0.035; // share differing from the previous frame
 
 export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: () => void }) {
-  /**
-   * Sends the blended photo back so the QR link serves it too. Deliberately
-   * not awaited by the visitor-facing flow - the screen already shows the
-   * finished picture from a local blob.
-   */
-  const uploadFinal = useCallback(
-    async (shareToken: string, blob: Blob, ms: number) => {
-      try {
-        const buffer = await blob.arrayBuffer();
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-
-        await fetch('/api/booth/finalize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ shareToken, imageBase64: btoa(binary), ms }),
-        });
-      } catch (err) {
-        // The visitor still has their photo on screen; the QR just serves the
-        // model's version until the next successful upload.
-        console.warn('[real-face] could not upload blended photo:', err);
-      }
-    },
-    [token],
-  );
-
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const [config, setConfig] = useState<Config | null>(null);
@@ -77,6 +55,7 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
   const [online, setOnline] = useState(true);
   const [queued, setQueued] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [pointerMoving, setPointerMoving] = useState(false);
 
   // The animation loop and timers read these instead of closing over state,
   // which would otherwise go stale between renders.
@@ -120,13 +99,17 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
   const grabFrame = useCallback((): string | null => {
     const video = videoRef.current;
     if (!video?.videoWidth) return null;
-    const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+    // Send the sensor's own frame. A booth shot is a whole standing person, so
+    // the face is a small part of it - at 1080p it is barely 200px tall, and
+    // the transplanted face is only ever as sharp as this capture was. Throwing
+    // pixels away here cannot be recovered later by anything.
+    const scale = Math.min(1, CAPTURE_MAX / Math.max(video.videoWidth, video.videoHeight));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
     // drawImage takes the raw frame; the CSS mirror is presentation only.
     canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.92).split(',')[1] ?? null;
+    return canvas.toDataURL('image/jpeg', 0.95).split(',')[1] ?? null;
   }, []);
 
   const cooldown = useCallback(() => {
@@ -199,31 +182,10 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
         return;
       }
 
-      const payload = data as Result;
-
-      /* -------- Put the visitor's real face in --------
-         The model draws a face rather than copying one, so this replaces that
-         region with the actual pixels from the capture. It runs here in the
-         booth, works offline, and never blocks the result: any failure just
-         shows the model's own photo. */
-      if (configRef.current?.settings.realFace) {
-        try {
-          const generated = await (await fetch(payload.imageUrl)).blob();
-          const captureBlob = await (await fetch(`data:image/jpeg;base64,${image}`)).blob();
-          const blended = await blendRealFace(generated, captureBlob);
-
-          if (blended.ok) {
-            payload.imageUrl = URL.createObjectURL(blended.blob);
-            void uploadFinal(payload.shareToken, blended.blob, blended.ms);
-          } else {
-            console.warn('[real-face]', blended.reason);
-          }
-        } catch (err) {
-          console.warn('[real-face] skipped:', err);
-        }
-      }
-
-      setResult(payload);
+      // The visitor's real face is already in this photo - the server puts it
+      // there before storing, so what the screen shows and what the QR serves
+      // are the same file.
+      setResult(data as Result);
       setStageBoth('result');
       later(cooldown, (configRef.current?.settings.resultDisplaySeconds ?? 25) * 1000);
     } catch {
@@ -233,7 +195,7 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
       clearInterval(tick);
       clearInterval(cycle);
     }
-  }, [clearTimers, cooldown, grabFrame, later, onUnpair, setStageBoth, token, uploadFinal]);
+  }, [clearTimers, cooldown, grabFrame, later, onUnpair, setStageBoth, token]);
 
   const startCountdown = useCallback(() => {
     if (stageRef.current === 'count') return;
@@ -284,9 +246,6 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
           await videoRef.current.play();
         }
         goIdle();
-        // Load the face model now, during the idle screen, so the first
-        // visitor does not wait for a 4 MB download.
-        preloadFaceModel();
       } catch (err) {
         if (!cancelled) {
           setError({
@@ -432,6 +391,24 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
     return () => document.removeEventListener('keydown', onKey);
   }, [goIdle, resetBackground, startCountdown]);
 
+  /* ---------------- cursor ----------------
+     Shown whenever the mouse is being moved, hidden again once it has been
+     still for a moment, so the booth looks like a kiosk to a visitor and still
+     behaves like a computer for whoever is setting it up. */
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const settle = () => {
+      setPointerMoving(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setPointerMoving(false), 2500);
+    };
+    window.addEventListener('mousemove', settle);
+    return () => {
+      window.removeEventListener('mousemove', settle);
+      clearTimeout(timer);
+    };
+  }, []);
+
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   const pick = (s: Scene) => {
@@ -444,11 +421,26 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
 
   return (
     <div
-      className={`booth${live ? ' live' : ''}${busy ? ' busy' : ''}`}
+      className={`booth${live ? ' live' : ''}${busy ? ' busy' : ''}${pointerMoving ? '' : ' at-rest'}`}
       style={{ '--accent': config?.branding.accent ?? '#e0a63c' } as React.CSSProperties}
     >
       <video ref={videoRef} autoPlay playsInline muted />
       <div className="vignette" />
+
+      {/* Where to stand and how. A composite scene takes the visitor exactly as
+          photographed - there is no prompt telling a model to join their hands,
+          so the booth has to ask. Standing everyone in the same outline also
+          keeps the cut-out the same size from one visitor to the next. */}
+      {live ? (
+        <div className="guide" aria-hidden="true">
+          <div className="guide-body" />
+          <p className="guide-say">
+            <span className="guide-icon">🙏</span>
+            हाथ जोड़कर खड़े हों
+            <small>Stand with your hands joined</small>
+          </p>
+        </div>
+      ) : null}
 
       <header className="bar">
         <div className="chips">
@@ -504,6 +496,7 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
           <div className="count" key={countdown}>
             {countdown}
           </div>
+          <p className="sub">🙏 हाथ जोड़िए</p>
         </section>
       ) : null}
 
