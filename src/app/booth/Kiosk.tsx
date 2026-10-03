@@ -56,6 +56,9 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
   const [queued, setQueued] = useState(0);
   const [flash, setFlash] = useState(false);
   const [pointerMoving, setPointerMoving] = useState(false);
+  const [resultSecondsLeft, setResultSecondsLeft] = useState<number | null>(null);
+  const [isResultPaused, setIsResultPaused] = useState(false);
+  const resultReadyAt = useRef(0);
 
   // The animation loop and timers read these instead of closing over state,
   // which would otherwise go stale between renders.
@@ -92,6 +95,8 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
     clearTimers();
     holdMs.current = 0;
     setProgress(0);
+    setResultSecondsLeft(null);
+    setIsResultPaused(false);
     setStageBoth('idle');
   }, [clearTimers, setStageBoth]);
 
@@ -114,14 +119,17 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
 
   const cooldown = useCallback(() => {
     clearTimers();
+    setResultSecondsLeft(null);
+    setIsResultPaused(false);
     setStageBoth('cooldown');
     // Safety net if detection never sees the room clear (bright screen, crowd).
+    // In a crowded seminar/mela, recover fast (2.5s) so the next visitor can pose.
     later(() => {
       if (stageRef.current === 'cooldown') {
         resetBackground();
         goIdle();
       }
-    }, 12_000);
+    }, 2500);
   }, [clearTimers, goIdle, later, resetBackground, setStageBoth]);
 
   const capture = useCallback(async () => {
@@ -187,7 +195,10 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
       // are the same file.
       setResult(data as Result);
       setStageBoth('result');
-      later(cooldown, (configRef.current?.settings.resultDisplaySeconds ?? 25) * 1000);
+      resultReadyAt.current = Date.now();
+      setIsResultPaused(false);
+      const displaySec = configRef.current?.settings.resultDisplaySeconds ?? 25;
+      setResultSecondsLeft(displaySec > 0 ? displaySec : null);
     } catch {
       // Reaching here means the request never completed - keep the capture.
       await stash();
@@ -196,6 +207,22 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
       clearInterval(cycle);
     }
   }, [clearTimers, cooldown, grabFrame, later, onUnpair, setStageBoth, token]);
+
+  /* ---------------- result countdown timer ---------------- */
+  useEffect(() => {
+    if (stage !== 'result' || resultSecondsLeft === null || isResultPaused) return;
+
+    if (resultSecondsLeft <= 0) {
+      cooldown();
+      return;
+    }
+
+    const t = setTimeout(() => {
+      setResultSecondsLeft((sec) => (sec !== null && sec > 0 ? sec - 1 : 0));
+    }, 1000);
+
+    return () => clearTimeout(t);
+  }, [stage, resultSecondsLeft, isResultPaused, cooldown]);
 
   const startCountdown = useCallback(() => {
     if (stageRef.current === 'count') return;
@@ -320,6 +347,13 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
       }
       if (current !== 'idle' && current !== 'detect') return;
 
+      const autoSec = configRef.current?.settings.autoCaptureSeconds ?? 2;
+      // When autoCaptureSeconds is 0 (or disabled), don't auto-trigger. Rely purely on tap/clicker!
+      if (autoSec <= 0) {
+        if (current === 'detect') goIdle();
+        return;
+      }
+
       const present = vsBg > PRESENT;
       if (!present) {
         for (let i = 0; i < bg.current.length; i++) bg.current[i] += (gray[i] - bg.current[i]) * 0.05;
@@ -332,9 +366,10 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
       if (current === 'idle') setStageBoth('detect');
 
       const settled = vsPrev < STILL;
-      holdMs.current = settled ? holdMs.current + dt : Math.max(0, holdMs.current - dt * 0.6);
+      // In a crowd, don't brutally drain the timer by 60% on background movement:
+      holdMs.current = settled ? holdMs.current + dt : Math.max(0, holdMs.current - dt * 0.15);
 
-      const need = (configRef.current?.settings.autoCaptureSeconds ?? 2) * 1000;
+      const need = autoSec * 1000;
       setProgress(Math.min(100, (holdMs.current / need) * 100));
       if (holdMs.current >= need) startCountdown();
     };
@@ -365,12 +400,34 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
     };
   }, [token]);
 
-  /* ---------------- keyboard ---------------- */
+  /* ---------------- keyboard & wireless clicker ---------------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      // Presentation clickers commonly send Space, Enter, PageDown, PageUp, ArrowRight, ArrowDown
+      if (
+        e.code === 'Space' ||
+        e.code === 'Enter' ||
+        e.code === 'PageDown' ||
+        e.code === 'PageUp' ||
+        e.code === 'ArrowRight' ||
+        e.code === 'ArrowDown'
+      ) {
         e.preventDefault();
-        if (stageRef.current === 'idle' || stageRef.current === 'detect') startCountdown();
+        const cur = stageRef.current;
+        if (cur === 'idle' || cur === 'detect' || cur === 'cooldown') {
+          startCountdown();
+        } else if (cur === 'result') {
+          // Safety lock: Don't allow accidental clicks or key repeat to dismiss
+          // the QR screen during the first 3 seconds after it appears!
+          if (Date.now() - resultReadyAt.current < 3000) return;
+          resetBackground();
+          goIdle();
+        }
+      }
+      if (e.key === 'p' || e.key === 'P') {
+        if (stageRef.current === 'result') {
+          setIsResultPaused((prev) => !prev);
+        }
       }
       if (e.key === 'f' || e.key === 'F') {
         if (document.fullscreenElement) document.exitFullscreen();
@@ -423,6 +480,14 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
     <div
       className={`booth${live ? ' live' : ''}${busy ? ' busy' : ''}${pointerMoving ? '' : ' at-rest'}`}
       style={{ '--accent': config?.branding.accent ?? '#e0a63c' } as React.CSSProperties}
+      onClick={(e) => {
+        const cur = stageRef.current;
+        if (cur === 'idle' || cur === 'detect' || cur === 'cooldown') {
+          if (!(e.target as HTMLElement).closest('.bar, button')) {
+            startCountdown();
+          }
+        }
+      }}
     >
       <video ref={videoRef} autoPlay playsInline muted />
       <div className="vignette" />
@@ -462,7 +527,7 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
           </span>
           {queued > 0 ? <span>{queued} waiting to send</span> : null}
           {config?.credits != null ? <span>{config.credits} credits</span> : null}
-          <span>SPACE capture · F fullscreen</span>
+          <span>Clicker / SPACE / Tap capture · F fullscreen</span>
         </div>
       </header>
 
@@ -516,23 +581,88 @@ export default function Kiosk({ token, onUnpair }: { token: string; onUnpair: ()
           <aside className="side">
             <h2>{scene?.name}</h2>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="qr" src={result.qr} alt="Scan to download" />
+            <img
+              className="qr"
+              src={result.qr}
+              alt="Scan to download"
+              title="Click QR code to Pause screen"
+              onClick={() => setIsResultPaused((p) => !p)}
+            />
             <p>
               फ़ोन से स्कैन कीजिए
               <br />
-              <small>Scan to download</small>
+              <small>Scan to download · Click QR to pause</small>
             </p>
+
+            {/* Timer status & Pause indicator */}
+            {resultSecondsLeft !== null ? (
+              <div className="qr-timer-box">
+                <div className="qr-timer-text">
+                  {isResultPaused ? (
+                    <span className="paused-badge">⏸️ स्क्रीन रुकी हुई है (Paused)</span>
+                  ) : (
+                    <span>⏳ <strong>{resultSecondsLeft}s</strong> remaining to scan</span>
+                  )}
+                  <button
+                    type="button"
+                    className="qr-pause-toggle"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsResultPaused((p) => !p);
+                    }}
+                  >
+                    {isResultPaused ? '▶️ Resume' : '⏸️ रोकें (Pause)'}
+                  </button>
+                </div>
+                {!isResultPaused && (
+                  <div className="qr-progress-bar">
+                    <i
+                      style={{
+                        width: `${Math.max(
+                          0,
+                          (resultSecondsLeft / (configRef.current?.settings.resultDisplaySeconds || 25)) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="qr-timer-box">
+                <span className="paused-badge">✨ स्क्रीन रुकी हुई है (Paused for Scanning)</span>
+              </div>
+            )}
+
             <button
-              className="action"
+              className="action next-btn"
               onClick={() => {
                 resetBackground();
                 goIdle();
               }}
             >
-              फिर से / Again
+              अगला व्यक्ति / Next Person (Space) ➔
             </button>
           </aside>
         </section>
+      ) : null}
+
+      {/* Tap-to-capture button for touchscreen kiosks & mouse clickers */}
+      {(stage === 'idle' || stage === 'detect' || stage === 'cooldown') ? (
+        <button
+          type="button"
+          className="tap-capture-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            startCountdown();
+          }}
+          aria-label="फ़ोटो खींचें / Tap to Capture"
+        >
+          <span className="tap-capture-icon">📸</span>
+          <span className="tap-capture-text">
+            फ़ोटो खींचें
+            <small>Tap to Shoot · Space / Clicker</small>
+          </span>
+        </button>
       ) : null}
 
       {stage === 'queued' ? (

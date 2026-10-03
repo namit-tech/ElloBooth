@@ -197,13 +197,15 @@ export default function SettingsForm({
 
         <div className="grid grid-4">
           <div className="field">
-            <label htmlFor="autoCaptureSeconds">Hold still (sec)</label>
+            <label htmlFor="autoCaptureSeconds">
+              Hold still (sec) <small style={{ opacity: 0.6 }}>(0 = Clicker/Tap only)</small>
+            </label>
             <input
               id="autoCaptureSeconds"
               name="autoCaptureSeconds"
               type="number"
               step="0.5"
-              min={1}
+              min={0}
               max={10}
               defaultValue={settings.autoCaptureSeconds}
             />
@@ -220,13 +222,15 @@ export default function SettingsForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="resultDisplaySeconds">Show result (sec)</label>
+            <label htmlFor="resultDisplaySeconds">
+              Show result (sec) <small style={{ opacity: 0.6 }}>(0 = Pause until Next is clicked)</small>
+            </label>
             <input
               id="resultDisplaySeconds"
               name="resultDisplaySeconds"
               type="number"
-              min={5}
-              max={120}
+              min={0}
+              max={180}
               defaultValue={settings.resultDisplaySeconds}
             />
           </div>

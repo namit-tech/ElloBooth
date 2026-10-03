@@ -135,14 +135,15 @@
 
 .booth .consent {
   position: absolute;
-  bottom: 26px;
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
   max-width: min(760px, 86vw);
-  font-size: 13px;
-  line-height: 1.5;
-  opacity: 0.42;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 0.35;
   padding: 0 16px;
+  pointer-events: none;
 }
 
 /* ---------- result ---------- */
@@ -156,11 +157,86 @@
 }
 @keyframes booth-rise { from { opacity: 0; transform: translateY(38px) scale(0.95); } }
 
-.booth .side { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.booth .side { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .booth .side h2 { font-size: 28px; margin: 0; color: var(--accent); font-weight: 600; }
-.booth .side img.qr { width: 210px; height: 210px; border-radius: 12px; background: #fff; padding: 10px; }
-.booth .side p { font-size: 17px; margin: 0; line-height: 1.5; }
-.booth .side small { font-size: 13px; opacity: 0.5; }
+.booth .side img.qr {
+  width: 210px;
+  height: 210px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.booth .side img.qr:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 26px rgba(224, 166, 60, 0.45);
+}
+.booth .side p { font-size: 16px; margin: 0; line-height: 1.4; text-align: center; }
+.booth .side small { font-size: 12px; opacity: 0.55; }
+
+/* QR Countdown and Pause Controls */
+.booth .qr-timer-box {
+  width: 100%;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 6px;
+}
+
+.booth .qr-timer-text {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 13px;
+  color: #f6efe3;
+}
+
+.booth .qr-pause-toggle {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f6efe3;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  cursor: pointer !important;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.booth .qr-pause-toggle:hover {
+  background: var(--accent);
+  color: #100e0c;
+  border-color: var(--accent);
+}
+
+.booth .paused-badge {
+  background: rgba(224, 166, 60, 0.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.booth .qr-progress-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.booth .qr-progress-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 1s linear;
+}
 
 .booth button.action {
   padding: 14px 36px;
@@ -171,7 +247,12 @@
   font: inherit;
   font-size: 16px;
   font-weight: 700;
-  cursor: pointer;
+  cursor: pointer !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.booth button.action:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 20px rgba(224, 166, 60, 0.4);
 }
 
 .booth .err {
@@ -258,7 +339,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding-bottom: 6vh;
+  padding-bottom: 110px;
   pointer-events: none;
   opacity: 0.85;
 }
@@ -294,3 +375,71 @@
 
 /* Out of the way once the countdown owns the screen. */
 .booth .stage { z-index: 2; }
+
+/* ---------- Tap to Capture Button ---------- */
+.booth .tap-capture-btn {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 32px;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  background: rgba(16, 14, 12, 0.92);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(224, 166, 60, 0.35);
+  color: #fff;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  backdrop-filter: blur(12px);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.18s ease, background 0.18s ease;
+  animation: tap-btn-pulse 2.2s infinite ease-in-out;
+}
+
+.booth .tap-capture-btn:hover,
+.booth .tap-capture-btn:focus-visible {
+  transform: translateX(-50%) scale(1.05);
+  background: var(--accent);
+  color: #100e0c;
+  box-shadow: 0 12px 38px rgba(224, 166, 60, 0.65);
+}
+
+.booth .tap-capture-btn:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
+.booth .tap-capture-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.booth .tap-capture-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+}
+
+.booth .tap-capture-text small {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+@keyframes tap-btn-pulse {
+  0%, 100% { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 16px rgba(224, 166, 60, 0.25); }
+  50% { box-shadow: 0 10px 38px rgba(0, 0, 0, 0.8), 0 0 32px rgba(224, 166, 60, 0.65); }
+}
+
+/* Ensure cursor shows on hover over buttons even if pointer has settled */
+.booth.at-rest .tap-capture-btn,
+.booth.at-rest .bar button,
+.booth.at-rest .action {
+  cursor: pointer !important;
+}

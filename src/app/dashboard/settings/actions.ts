@@ -110,9 +110,9 @@ const Settings = z.object({
   provider: z.enum(PROVIDERS),
   model: z.string().trim().min(3),
   imageSize: z.enum(['1K', '2K', '4K']),
-  autoCaptureSeconds: z.coerce.number().min(1).max(10),
+  autoCaptureSeconds: z.coerce.number().min(0).max(10),
   countdownSeconds: z.coerce.number().int().min(1).max(10),
-  resultDisplaySeconds: z.coerce.number().int().min(5).max(120),
+  resultDisplaySeconds: z.coerce.number().int().min(0).max(180),
   retentionDays: z.coerce.number().int().min(0).max(365),
   // An unchecked checkbox is simply absent from FormData, so treat missing as off.
   identityLock: z.preprocess((v) => v === 'on' || v === 'true' || v === true, z.boolean()),
